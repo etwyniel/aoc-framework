@@ -15,13 +15,23 @@ use std::{
     time::Duration,
 };
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Eq, Clone, Debug)]
 pub enum Answer {
     Num(u64),
     Str(Cow<'static, str>),
 }
 
 pub use Answer::*;
+
+impl PartialEq for Answer {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Num(l), Num(r)) => l == r,
+            (Str(l), Str(r)) => l.trim() == r.trim(),
+            _ => false,
+        }
+    }
+}
 
 #[allow(non_snake_case)]
 pub const fn ConstStr(s: &'static str) -> Answer {
@@ -144,7 +154,7 @@ pub fn run<P: Part>(session_key: &str) -> anyhow::Result<(Answer, Duration)> {
             .get(url)
             .header(
                 reqwest::header::USER_AGENT,
-                "aoc-framework by etwyniel@gmail.com",
+                "github.com/etwyniel/aoc-framework by etwyniel@gmail.com",
             )
             .send()?
             .error_for_status()?;
@@ -167,7 +177,7 @@ pub fn run_and_display<P: Part>(session_key: &str) {
     let p = P::N;
     match run::<P>(session_key) {
         Ok((res, delta)) => eprintln!(
-            "\x1b[1;32mOK \x1b[0m {y}-12-{d:02}.{p} => {res:<10}\t({:.2?})",
+            "\x1b[1;32mOK \x1b[0m {y}-12-{d:02}.{p} => {res:<15}\t({:.2?})",
             delta
         ),
         Err(err) => eprintln!("\x1b[1;31mERR\x1b[0m {y}-12-{d:02}.{p} => {err:?}"),
