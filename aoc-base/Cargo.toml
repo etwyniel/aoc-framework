@@ -1,5 +1,5 @@
 [package]
-name = "aoc-framework"
+name = "aoc-base"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,5 +9,3 @@ edition = "2021"
 anyhow = "1.0.66"
 itertools = "0.10.5"
 reqwest = { version = "0.11.12", features = ["blocking", "default-tls", "cookies"] }
-aoc-derive = { path = "./aoc-derive" }
-aoc-base = { path = "./aoc-base" }
