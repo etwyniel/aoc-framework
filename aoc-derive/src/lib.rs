@@ -108,13 +108,19 @@ fn convert_bufread(ty: &Type) -> syn::Result<proc_macro2::TokenStream> {
                 }
             }
         }
-        Type::Path(TypePath { path, .. }) if path.is_ident("Vec") => {
+        Type::Path(TypePath { path, .. }) => {
             if let Some(item) = get_vec_item(path) {
                 if item.is_ident("String") {
-                    return Ok(quote!(input.lines().collect::<Vec<Result<_, _>>().unwrap()));
+                    return Ok(quote!(input
+                        .lines()
+                        .collect::<Result<Vec<_>, _>>()
+                        .unwrap()));
                 }
                 if item.is_ident("u8") {
-                    return Ok(quote!(input.bytes().collect::<Vec<Result<_, _>>().unwrap()));
+                    return Ok(quote!(input
+                        .bytes()
+                        .collect::<Result<Vec<_>, _>>()
+                        .unwrap()));
                 }
             }
         }
