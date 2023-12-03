@@ -8,3 +8,7 @@ pub use aoc_base::{
     Day, Part,
 };
 pub use aoc_derive::aoc;
+
+pub mod grid;
+pub mod helpers;
+pub mod point;
