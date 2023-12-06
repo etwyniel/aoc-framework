@@ -4,12 +4,13 @@ use syn::{
     parse_macro_input, punctuated::Punctuated, spanned::Spanned, AngleBracketedGenericArguments,
     AssocType, Expr, ExprLit, FnArg, GenericArgument, ItemFn, Lit, MetaNameValue, PatType, Path,
     PathArguments, ReturnType, Signature, Token, TraitBound, Type, TypeImplTrait, TypeParamBound,
-    TypePath,
+    TypePath, TypeReference,
 };
 
 struct Attributes {
     part: u8,
     example_result: Option<Lit>,
+    bench_count: Option<u32>,
 }
 
 fn attr_value<'a>(attrs: &'a Punctuated<MetaNameValue, Token![,]>, path: &str) -> Option<&'a Expr> {
@@ -51,9 +52,17 @@ fn parse_attrs(attrs: Punctuated<MetaNameValue, Token![,]>) -> syn::Result<Attri
             _ => None,
         });
 
+    let bench_count = attr_value(&attrs, "benchmark").and_then(|attr| match &attr {
+        Expr::Lit(ExprLit {
+            lit: Lit::Int(i), ..
+        }) => i.base10_parse().ok(),
+        _ => None,
+    });
+
     Ok(Attributes {
         part,
         example_result,
+        bench_count,
     })
 }
 
@@ -105,6 +114,9 @@ fn convert_bufread(ty: &Type) -> syn::Result<proc_macro2::TokenStream> {
                     if item.is_ident("u8") {
                         return Ok(quote!(input.bytes().map(|b| b.unwrap())));
                     }
+                    if item.segments.last().unwrap().ident == "Vec" {
+                        return Ok(quote!(input.split(b'\n').map(|ln| ln.unwrap())));
+                    }
                 }
             }
         }
@@ -124,6 +136,16 @@ fn convert_bufread(ty: &Type) -> syn::Result<proc_macro2::TokenStream> {
                 }
             }
         }
+        Type::Reference(TypeReference { elem, .. }) => match elem.as_ref() {
+            Type::Path(TypePath { path, .. }) if path.is_ident("str") => {
+                return Ok(quote!(&{
+                    let mut out = String::new();
+                    input.read_to_string(&mut out).unwrap();
+                    out
+                }))
+            }
+            _ => (),
+        },
         _ => (),
     }
     Err(syn::Error::new(
@@ -148,6 +170,7 @@ fn impl_part(function: ItemFn, attrs: Attributes) -> syn::Result<proc_macro2::To
     let Attributes {
         part,
         example_result,
+        bench_count,
     } = attrs;
     let example_const = example_result
         .map(|res| match res {
@@ -167,6 +190,20 @@ fn impl_part(function: ItemFn, attrs: Attributes) -> syn::Result<proc_macro2::To
     } else {
         quote!(Ok(res.into()))
     };
+    let bench = if let Some(count) = bench_count {
+        quote!(
+        fn bench(mut input: impl std::io::BufRead) -> Option<std::time::Duration> {
+            let converted = #conversion;
+            let start = std::time::Instant::now();
+            for _ in 0..#count {
+                _ = #fn_ident(&converted);
+            }
+            Some(start.elapsed() / #count)
+        }
+        )
+    } else {
+        quote!()
+    };
     Ok(quote!(
         #[doc(hidden)]
         #[allow(nonstandard_style)]
@@ -175,10 +212,12 @@ fn impl_part(function: ItemFn, attrs: Attributes) -> syn::Result<proc_macro2::To
         const N: u8 = #part;
         #example_const
 
-        fn run(input: impl std::io::BufRead) -> anyhow::Result<aoc_framework::Answer> {
+        fn run(mut input: impl std::io::BufRead) -> anyhow::Result<aoc_framework::Answer> {
             let res = #fn_ident(#conversion);
             #result_conv
         }
+
+        #bench
     }
     #function
     ))

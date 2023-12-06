@@ -9,8 +9,8 @@ use std::{
     env::current_exe,
     fmt::Display,
     fs::File,
-    io::{BufRead, BufReader},
-    path::PathBuf,
+    io::{BufRead, BufReader, Seek},
+    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
@@ -67,7 +67,7 @@ pub trait Day {
     type Part1: Part;
     type Part2: Part;
 
-    fn run(session_key: &str) {
+    fn run(session_key: Option<&str>) {
         if Self::Part1::N != 0 {
             run_and_display::<Self, Self::Part1>(session_key, 1)
         } else {
@@ -107,6 +107,10 @@ pub trait Part {
         }
         Ok(())
     }
+
+    fn bench(_input: impl BufRead) -> Option<Duration> {
+        None
+    }
 }
 
 impl Day for () {
@@ -124,7 +128,24 @@ fn day_input_filename<D: Day + ?Sized>() -> String {
     format!("2022-12-{}.in", D::N)
 }
 
-pub fn run<D: Day + ?Sized, P: Part>(session_key: &str) -> anyhow::Result<(Answer, Duration)> {
+fn bench<P: Part>(filename: &Path) -> Duration {
+    let mut reader = BufReader::new(File::open(filename).unwrap());
+    if let Some(d) = P::bench(&mut reader) {
+        return d;
+    }
+    let count = 100;
+    let start = std::time::Instant::now();
+    for _ in 0..count {
+        reader.seek(std::io::SeekFrom::Start(0)).unwrap();
+        P::run(&mut reader).unwrap();
+    }
+    let delta = start.elapsed();
+    delta / count
+}
+
+pub fn run<D: Day + ?Sized, P: Part>(
+    session_key: Option<&str>,
+) -> anyhow::Result<(Answer, Duration)> {
     let y = D::YEAR;
     let d = D::N;
     // Check example inputs/outputs
@@ -150,6 +171,9 @@ pub fn run<D: Day + ?Sized, P: Part>(session_key: &str) -> anyhow::Result<(Answe
         let url =
             reqwest::Url::parse(&format!("https://adventofcode.com/{y}/day/{d}/input")).unwrap();
         let jar = reqwest::cookie::Jar::default();
+        let Some(session_key) = session_key else {
+            bail!("Could not find AOC_TOKEN in env")
+        };
         jar.add_cookie_str(&format!("session={session_key}"), &url);
         let client = reqwest::blocking::Client::builder()
             .cookie_provider(Arc::new(jar))
@@ -166,14 +190,17 @@ pub fn run<D: Day + ?Sized, P: Part>(session_key: &str) -> anyhow::Result<(Answe
         std::io::copy(&mut resp, &mut output)?;
     }
 
-    let reader = BufReader::new(File::open(input_file)?);
+    let reader = BufReader::new(File::open(&input_file)?);
     let start = std::time::Instant::now();
     let res = P::run(reader)?;
-    let delta = start.elapsed();
+    let mut delta = start.elapsed();
+    if delta < Duration::from_millis(10) {
+        delta = bench::<P>(&input_file)
+    }
     Ok((res, delta))
 }
 
-pub fn run_and_display<D: Day + ?Sized, P: Part>(session_key: &str, p: u8) {
+pub fn run_and_display<D: Day + ?Sized, P: Part>(session_key: Option<&str>, p: u8) {
     let y = D::YEAR;
     let d = D::N;
     match run::<D, P>(session_key) {

@@ -15,3 +15,8 @@ fn day1_part1(_input: impl Iterator<Item = String>) -> anyhow::Result<u64> {
 fn day1_part2(_input: Vec<u8>) -> String {
     todo!()
 }
+
+#[aoc(part = 3)]
+fn test_str(_input: &str) -> u64 {
+    0
+}

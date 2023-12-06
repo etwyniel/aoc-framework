@@ -65,3 +65,14 @@ impl From<i8> for Direction {
         Self::new(value)
     }
 }
+
+pub trait BytesSplitter {
+    fn split_once(&self, b: u8) -> Option<(&[u8], &[u8])>;
+}
+
+impl BytesSplitter for [u8] {
+    fn split_once(&self, b: u8) -> Option<(&[u8], &[u8])> {
+        let mut it = self.splitn(2, |&by| by == b);
+        it.next().zip(it.next())
+    }
+}

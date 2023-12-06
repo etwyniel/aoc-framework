@@ -132,60 +132,9 @@ impl<const N: usize> Point<N> {
     }
 }
 
-pub mod ext {
-    use super::{Point, Point3};
-
-    pub trait Point2d {
-        fn x(self) -> isize;
-        fn y(self) -> isize;
-        fn new(x: isize, y: isize) -> Self;
-    }
-
-    impl Point2d for Point<2> {
-        fn x(self) -> isize {
-            self.components[0]
-        }
-
-        fn y(self) -> isize {
-            self.components[1]
-        }
-
-        fn new(x: isize, y: isize) -> Self {
-            Point { components: [x, y] }
-        }
-    }
-
-    impl Point2d for Point<3> {
-        fn x(self) -> isize {
-            self.components[0]
-        }
-
-        fn y(self) -> isize {
-            self.components[1]
-        }
-
-        fn new(x: isize, y: isize) -> Self {
-            Point {
-                components: [x, y, 0],
-            }
-        }
-    }
-
-    pub trait Point3d: Point2d {
-        fn z(self) -> isize;
-        fn new(x: isize, y: isize, z: isize) -> Point3;
-    }
-
-    impl Point3d for Point<3> {
-        fn z(self) -> isize {
-            self.components[2]
-        }
-
-        fn new(x: isize, y: isize, z: isize) -> Point3 {
-            Point {
-                components: [x, y, z],
-            }
-        }
+impl<const N: usize> From<[isize; N]> for Point<N> {
+    fn from(components: [isize; N]) -> Self {
+        Point { components }
     }
 }
 
@@ -194,11 +143,11 @@ impl Point2 {
         self.x() as usize + self.y() as usize * w
     }
 
-    pub fn x(self) -> isize {
+    pub const fn x(self) -> isize {
         self.components[0]
     }
 
-    pub fn y(self) -> isize {
+    pub const fn y(self) -> isize {
         self.components[1]
     }
 
@@ -212,12 +161,16 @@ impl Point2 {
 }
 
 impl Point3 {
-    pub fn x(self) -> isize {
+    pub const fn x(self) -> isize {
         self.components[0]
     }
 
-    pub fn y(self) -> isize {
+    pub const fn y(self) -> isize {
         self.components[1]
+    }
+
+    pub const fn z(self) -> isize {
+        self.components[2]
     }
 
     pub fn new(x: isize, y: isize) -> Self {

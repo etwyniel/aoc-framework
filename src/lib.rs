@@ -12,3 +12,5 @@ pub use aoc_derive::aoc;
 pub mod grid;
 pub mod helpers;
 pub mod point;
+
+pub use helpers::BytesSplitter;
