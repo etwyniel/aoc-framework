@@ -63,6 +63,7 @@ pub trait Day {
     const YEAR: u16;
     const N: u8;
     const EXAMPLE: Option<&'static str> = None;
+    const PART2_EXAMPLE: Option<&'static str> = None;
 
     type Part1: Part;
     type Part2: Part;
@@ -149,7 +150,11 @@ pub fn run<D: Day + ?Sized, P: Part>(
     let y = D::YEAR;
     let d = D::N;
     // Check example inputs/outputs
-    if let Some(example) = D::EXAMPLE {
+    let example = (P::N == 2)
+        .then_some(D::PART2_EXAMPLE)
+        .flatten()
+        .or(D::EXAMPLE);
+    if let Some(example) = example {
         P::check(example)?;
     }
     let dir = if let Ok(dir) = std::env::var("CARGO_MANIFEST_DIR") {
@@ -215,28 +220,35 @@ pub fn run_and_display<D: Day + ?Sized, P: Part>(session_key: Option<&str>, p: u
 #[macro_export]
 macro_rules! impl_day {
     ($ident:ident: $year:literal[$day:literal]) => {
-        impl_day!($ident::{(), ()}: $year[$day], None);
+        impl_day!($ident::{(), ()}: $year[$day], None, None);
     };
     ($ident:ident::$part1:ty: $year:literal[$day:literal]) => {
-        impl_day!($ident::{$part1, ()}: $year[$day], None);
+        impl_day!($ident::{$part1, ()}: $year[$day], None, None);
     };
     ($ident:ident::{$part1:ty, $part2:ty}: $year:literal[$day:literal]) => {
-        impl_day!($ident::{$part1, $part2}: $year[$day], None);
+        impl_day!($ident::{$part1, $part2}: $year[$day], None, None);
     };
     ($ident:ident: $year:literal[$day:literal], $example:literal) => {
         impl_day!($ident::{(), ()}: $year[$day], $example);
     };
     ($ident:ident::$part1:ty: $year:literal[$day:literal], $example:literal) => {
-        impl_day!($ident::{$part1, ()}: $year[$day], Some($example));
+        impl_day!($ident::{$part1, ()}: $year[$day], Some($example), None);
+    };
+    ($ident:ident::$part1:ty: $year:literal[$day:literal], $example:literal, $example2:literal) => {
+        impl_day!($ident::{$part1, ()}: $year[$day], Some($example), Some($example2));
     };
     ($ident:ident::{$part1:ty, $part2:ty}: $year:literal[$day:literal], $example:literal) => {
-        impl_day!($ident::{$part1, $part2}: $year[$day], Some($example));
+        impl_day!($ident::{$part1, $part2}: $year[$day], Some($example), None);
     };
-    ($ident:ident::{$part1:ty, $part2:ty}: $year:literal[$day:literal], $example:expr) => {
+    ($ident:ident::{$part1:ty, $part2:ty}: $year:literal[$day:literal], $example:literal, $example2:literal) => {
+        impl_day!($ident::{$part1, $part2}: $year[$day], Some($example), Some($example2));
+    };
+    ($ident:ident::{$part1:ty, $part2:ty}: $year:literal[$day:literal], $example:expr, $example2:expr) => {
         impl $crate::Day for $ident {
             const YEAR: u16 = $year;
             const N: u8 = $day;
             const EXAMPLE: Option<&'static str> = $example;
+            const PART2_EXAMPLE: Option<&'static str> = $example2;
             type Part1 = $part1;
             type Part2 = $part2;
         }
