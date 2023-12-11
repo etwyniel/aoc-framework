@@ -188,7 +188,7 @@ impl Grid<u8, 2> {
     pub fn from_bytes(data: Vec<u8>) -> Self {
         let length = data.iter().position(|&b| b == b'\n').unwrap_or(data.len());
         let stride = length + 1;
-        let height = data.len() / length;
+        let height = (data.len() + 1) / stride;
         Grid(GridView {
             grid: data.into(),
             stride,
@@ -255,18 +255,19 @@ impl<const N: usize> Iterator for PointIter<N> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let size = &self.size.components;
-        let cur = &mut self.cur.components;
-        if cur[0] >= size[0] - 1 {
+        let cur = self.cur;
+        if cur.components[0] >= size[0] - 1 {
             return None;
         }
-        for (cur, size) in cur.iter_mut().zip(size.iter()).rev() {
-            if *cur == size - 1 {
-                *cur = 0;
+        let next = &mut self.cur.components;
+        for (next, size) in next.iter_mut().zip(size.iter()).rev() {
+            if *next == size - 1 {
+                *next = 0;
             } else {
-                *cur += 1;
+                *next += 1;
                 break;
             }
         }
-        Some(self.cur)
+        Some(cur)
     }
 }

@@ -199,7 +199,7 @@ pub fn run<D: Day + ?Sized, P: Part>(
     let start = std::time::Instant::now();
     let res = P::run(reader)?;
     let mut delta = start.elapsed();
-    if delta < Duration::from_millis(10) {
+    if delta < Duration::from_millis(1) {
         delta = bench::<P>(&input_file)
     }
     Ok((res, delta))

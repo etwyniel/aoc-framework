@@ -3,7 +3,7 @@ use std::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Point<const N: usize> {
     pub components: [isize; N],
 }
@@ -151,7 +151,7 @@ impl Point2 {
         self.components[1]
     }
 
-    pub fn new(x: isize, y: isize) -> Self {
+    pub const fn new(x: isize, y: isize) -> Self {
         Point { components: [x, y] }
     }
 
@@ -173,7 +173,7 @@ impl Point3 {
         self.components[2]
     }
 
-    pub fn new(x: isize, y: isize) -> Self {
+    pub const fn new(x: isize, y: isize) -> Self {
         Point {
             components: [x, y, 0],
         }
