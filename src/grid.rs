@@ -9,7 +9,7 @@ use crate::point::Point2;
 #[derive(Clone)]
 pub struct GridView<'a, T: Clone, const N: usize> {
     grid: Cow<'a, [T]>,
-    stride: usize,
+    stride: [usize; N],
     offset: Point<N>,
     size: Point<N>,
     // orientation: u8,
@@ -52,35 +52,64 @@ impl<'a, T: Clone, const N: usize> GridView<'a, T, N> {
     pub fn data_mut(&mut self) -> &mut [T] {
         self.grid.to_mut()
     }
+
+    pub fn in_bounds(&self, p: Point<N>) -> bool {
+        p.0.into_iter()
+            .zip(self.size.0)
+            .all(|(comp, size)| comp >= 0 && comp < size)
+    }
+
+    pub fn data_offset(&self, p: Point<N>) -> usize {
+        let Point(components) = p + self.offset;
+        components[0] as usize
+            + components
+                .into_iter()
+                .zip(self.stride)
+                .skip(1)
+                .map(|(comp, stride)| comp * stride as isize)
+                .sum::<isize>() as usize
+    }
+
+    pub fn offset_to_point(&self, mut off: usize) -> Point<N> {
+        let mut p = Point::default();
+        p.0.iter_mut()
+            .zip(self.stride)
+            .rev()
+            .for_each(|(comp, stride)| {
+                *comp = (off / stride) as isize;
+                off %= stride;
+            });
+        p
+    }
+
+    pub fn get(&self, p: Point<N>) -> Option<&T> {
+        if !self.in_bounds(p) {
+            return None;
+        }
+        self.grid.get(self.data_offset(p))
+    }
+
+    pub fn set(&mut self, index: Point<N>, val: T) -> bool {
+        if !self.in_bounds(index) {
+            return false;
+        }
+        let pos = self.data_offset(index);
+        if let Some(elem) = self.grid.to_mut().get_mut(pos) {
+            *elem = val;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl<'a, T: Clone> GridView<'a, T, 2> {
-    // fn lastx(&self) -> isize {
-    //     self.size.components[0] - 1
-    // }
-
-    // fn lasty(&self) -> isize {
-    //     self.size.components[1] - 1
-    // }
-
     pub fn to_global(&self, p: Point2) -> Point2 {
-        // let x = p.components[0];
-        // let y = p.components[1];
         self.offset + p
     }
 
     pub fn to_local(&self, p: Point2) -> Point2 {
         p - self.offset
-        // let p = p - self.offset;
-        // let x = p.components[0];
-        // let y = p.components[1];
-        // match self.orientation {
-        //     3 => Point2::new(x, y),
-        //     0 => Point2::new(y, self.lasty() - x),
-        //     1 => Point2::new(self.lastx() - x, self.lasty() - y),
-        //     2 => Point2::new(self.lastx() - y, x),
-        //     _ => unreachable!(),
-        // }
     }
 
     pub fn view(&self, offset: Point2, size: Point2) -> GridView<'_, T, 2> {
@@ -97,54 +126,8 @@ impl<'a, T: Clone> GridView<'a, T, 2> {
         self.grid.iter()
     }
 
-    pub fn get(&self, index: Point2) -> Option<&T> {
-        if index.components[0] >= self.size.components[0]
-            || index.components[1] >= self.size.components[1]
-            || index.components[0] < 0
-            || index.components[1] < 0
-        {
-            return None;
-        }
-        let pos = self.to_global(index);
-        let i = pos.components[1] as usize * self.stride + pos.components[0] as usize;
-        self.grid.get(i)
-    }
-
-    pub fn set(&mut self, index: Point2, val: T) -> bool {
-        if index.components[0] >= self.size.components[0]
-            || index.components[1] >= self.size.components[1]
-            || index.components[0] < 0
-            || index.components[1] < 0
-        {
-            return false;
-        }
-        let pos = self.to_global(index);
-        let i = pos.components[1] as usize * self.stride + pos.components[0] as usize;
-        if let Some(elem) = self.grid.to_mut().get_mut(i) {
-            *elem = val;
-            true
-        } else {
-            false
-        }
-    }
-
-    // pub fn rotate_right(&self) -> GridView<'a, T, 2> {
-    //     let mut res = self.clone();
-    //     res.orientation = res.orientation.rotate_right();
-    //     res.size = Point::new(self.size.y, self.size.x);
-    //     res
-    // }
-
     pub const fn size(&self) -> Point2 {
         self.size
-    }
-
-    pub fn offset_to_point(&self, off: usize) -> Point2 {
-        Point2::new((off % self.stride) as isize, (off / self.stride) as isize) - self.offset
-    }
-
-    pub fn point_to_offset(&self, pt: Point2) -> usize {
-        pt.components[0] as usize + pt.components[1] as usize * self.stride
     }
 }
 
@@ -160,7 +143,7 @@ impl<T: Clone + Default> Grid<T, 2> {
         let h = data.len() / stride;
         Grid(GridView {
             grid: Cow::Owned(data),
-            stride,
+            stride: [1, stride],
             offset: Point::default(),
             size: Point2::new(stride as isize, h as isize),
             // orientation: 3,
@@ -191,7 +174,7 @@ impl Grid<u8, 2> {
         let height = (data.len() + 1) / stride;
         Grid(GridView {
             grid: data.into(),
-            stride,
+            stride: [1, stride],
             offset: Point::default(),
             size: Point2::new(length as isize, height as isize),
         })
@@ -200,8 +183,8 @@ impl Grid<u8, 2> {
 
 impl<T: Clone + Display> GridView<'_, T, 2> {
     pub fn print(&self) {
-        for y in 0..self.size.components[1] {
-            for x in 0..self.size.components[0] {
+        for y in 0..self.size.0[1] {
+            for x in 0..self.size.0[0] {
                 if let Some(elem) = self.get(Point2::new(x, y)) {
                     print!("{elem}")
                 } else {
@@ -215,8 +198,8 @@ impl<T: Clone + Display> GridView<'_, T, 2> {
 
 impl GridView<'_, u8, 2> {
     pub fn print_bytes(&self) {
-        for y in 0..self.size.components[1] {
-            for x in 0..self.size.components[0] {
+        for y in 0..self.size.0[1] {
+            for x in 0..self.size.0[0] {
                 if let Some(&elem) = self.get(Point2::new(x, y)) {
                     print!("{}", elem as char)
                 } else {
@@ -228,11 +211,19 @@ impl GridView<'_, u8, 2> {
     }
 }
 
+impl<T: Clone> Index<(isize, isize)> for GridView<'_, T, 2> {
+    type Output = T;
+    fn index(&self, (x, y): (isize, isize)) -> &T {
+        let offset = self.data_offset(Point([x, y]));
+        &self.grid[offset]
+    }
+}
+
 impl<T: Clone + Display> Debug for GridView<'_, T, 2> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // writeln!(f)?;
-        for y in 0..self.size.components[1] {
-            for x in 0..self.size.components[0] {
+        for y in 0..self.size.0[1] {
+            for x in 0..self.size.0[0] {
                 if let Some(elem) = self.get(Point2::new(x, y)) {
                     write!(f, "{elem}")?;
                 } else {
@@ -254,12 +245,12 @@ impl<const N: usize> Iterator for PointIter<N> {
     type Item = Point<N>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let size = &self.size.components;
+        let size = &self.size.0;
         let cur = self.cur;
-        if cur.components[0] >= size[0] - 1 {
+        if cur.0[0] >= size[0] - 1 {
             return None;
         }
-        let next = &mut self.cur.components;
+        let next = &mut self.cur.0;
         for (next, size) in next.iter_mut().zip(size.iter()).rev() {
             if *next == size - 1 {
                 *next = 0;

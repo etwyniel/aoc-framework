@@ -4,23 +4,33 @@ use std::{
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Point<const N: usize> {
-    pub components: [isize; N],
-}
+pub struct Point<const N: usize>(pub [isize; N]);
 
 pub type Point2 = Point<2>;
 pub type Point3 = Point<3>;
 
+impl<const N: usize> AsRef<[isize; N]> for Point<N> {
+    fn as_ref(&self) -> &[isize; N] {
+        &self.0
+    }
+}
+
+impl<const N: usize> AsMut<[isize; N]> for Point<N> {
+    fn as_mut(&mut self) -> &mut [isize; N] {
+        &mut self.0
+    }
+}
+
 impl<const N: usize> Default for Point<N> {
     fn default() -> Self {
-        Point { components: [0; N] }
+        Point([0; N])
     }
 }
 
 impl<const N: usize> Display for Point<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "(")?;
-        for (i, component) in self.components.iter().enumerate() {
+        for (i, component) in self.0.iter().enumerate() {
             if i > 0 {
                 write!(f, ", ")?;
             }
@@ -46,10 +56,7 @@ impl<const N: usize> Add<Point<N>> for Point<N> {
 
 impl<const N: usize> AddAssign<Point<N>> for Point<N> {
     fn add_assign(&mut self, rhs: Point<N>) {
-        self.components
-            .iter_mut()
-            .zip(rhs.components)
-            .for_each(|(l, r)| *l += r)
+        self.0.iter_mut().zip(rhs.0).for_each(|(l, r)| *l += r)
     }
 }
 
@@ -63,10 +70,7 @@ impl<const N: usize> Sub<Point<N>> for Point<N> {
 
 impl<const N: usize> SubAssign<Point<N>> for Point<N> {
     fn sub_assign(&mut self, rhs: Point<N>) {
-        self.components
-            .iter_mut()
-            .zip(rhs.components)
-            .for_each(|(l, r)| *l -= r)
+        self.0.iter_mut().zip(rhs.0).for_each(|(l, r)| *l -= r)
     }
 }
 
@@ -80,7 +84,7 @@ impl<const N: usize> Mul<isize> for Point<N> {
 
 impl<const N: usize> MulAssign<isize> for Point<N> {
     fn mul_assign(&mut self, rhs: isize) {
-        self.components.iter_mut().for_each(|comp| *comp *= rhs)
+        self.0.iter_mut().for_each(|comp| *comp *= rhs)
     }
 }
 
@@ -94,14 +98,14 @@ impl<const N: usize> Neg for Point<N> {
 
 impl<const N: usize> Point<N> {
     fn copy_map<F: Fn(isize) -> isize>(mut self, f: F) -> Self {
-        self.components.iter_mut().for_each(|comp| *comp = f(*comp));
+        self.0.iter_mut().for_each(|comp| *comp = f(*comp));
         self
     }
 
     fn combine(mut self, rhs: Self, f: fn(isize, isize) -> isize) -> Self {
-        self.components
+        self.0
             .iter_mut()
-            .zip(rhs.components.iter())
+            .zip(rhs.0.iter())
             .for_each(|(out, &rhs)| *out = f(*out, rhs));
         self
     }
@@ -115,26 +119,26 @@ impl<const N: usize> Point<N> {
     }
 
     pub fn dist_manhattan(self, other: Self) -> usize {
-        self.components
+        self.0
             .into_iter()
-            .zip(other.components)
+            .zip(other.0)
             .map(|(l, r)| l.abs_diff(r))
             .sum()
     }
 
-    pub fn orientation_delta(o: usize) -> Self {
+    pub const fn orientation_delta(o: usize) -> Self {
         assert!(o < N * 2);
         let comp_ndx = o % N;
         let neg = o >= N;
         let mut components = [0; N];
         components[comp_ndx] = if neg { -1 } else { 1 };
-        Point { components }
+        Point(components)
     }
 }
 
 impl<const N: usize> From<[isize; N]> for Point<N> {
     fn from(components: [isize; N]) -> Self {
-        Point { components }
+        Point(components)
     }
 }
 
@@ -144,15 +148,15 @@ impl Point2 {
     }
 
     pub const fn x(self) -> isize {
-        self.components[0]
+        self.0[0]
     }
 
     pub const fn y(self) -> isize {
-        self.components[1]
+        self.0[1]
     }
 
     pub const fn new(x: isize, y: isize) -> Self {
-        Point { components: [x, y] }
+        Point([x, y])
     }
 
     pub const fn neighbors_diag(self) -> NeighborDiagIter {
@@ -162,21 +166,19 @@ impl Point2 {
 
 impl Point3 {
     pub const fn x(self) -> isize {
-        self.components[0]
+        self.0[0]
     }
 
     pub const fn y(self) -> isize {
-        self.components[1]
+        self.0[1]
     }
 
     pub const fn z(self) -> isize {
-        self.components[2]
+        self.0[2]
     }
 
     pub const fn new(x: isize, y: isize) -> Self {
-        Point {
-            components: [x, y, 0],
-        }
+        Point([x, y, 0])
     }
 }
 
