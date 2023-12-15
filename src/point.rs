@@ -3,6 +3,8 @@ use std::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
+use crate::direction::Direction;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Point<const N: usize>(pub [isize; N]);
 
@@ -74,6 +76,40 @@ impl<const N: usize> SubAssign<Point<N>> for Point<N> {
     }
 }
 
+impl<const N: usize> Add<Direction<N>> for Point<N> {
+    type Output = Self;
+
+    fn add(self, rhs: Direction<N>) -> Self::Output {
+        self.combine(rhs.delta(), |l, r| l + r)
+    }
+}
+
+impl<const N: usize> AddAssign<Direction<N>> for Point<N> {
+    fn add_assign(&mut self, rhs: Direction<N>) {
+        self.0
+            .iter_mut()
+            .zip(rhs.delta().0)
+            .for_each(|(l, r)| *l += r)
+    }
+}
+
+impl<const N: usize> Sub<Direction<N>> for Point<N> {
+    type Output = Self;
+
+    fn sub(self, rhs: Direction<N>) -> Self::Output {
+        self.combine(rhs.delta(), |l, r| l - r)
+    }
+}
+
+impl<const N: usize> SubAssign<Direction<N>> for Point<N> {
+    fn sub_assign(&mut self, rhs: Direction<N>) {
+        self.0
+            .iter_mut()
+            .zip(rhs.delta().0)
+            .for_each(|(l, r)| *l -= r)
+    }
+}
+
 impl<const N: usize> Mul<isize> for Point<N> {
     type Output = Self;
 
@@ -133,6 +169,10 @@ impl<const N: usize> Point<N> {
         let mut components = [0; N];
         components[comp_ndx] = if neg { -1 } else { 1 };
         Point(components)
+    }
+
+    pub const fn len_in_dir(self, dir: Direction<N>) -> isize {
+        dir.size_in_dir(self)
     }
 }
 

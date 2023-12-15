@@ -1,4 +1,3 @@
-use std::array;
 use std::ops::{Add, AddAssign, Neg, Sub, SubAssign};
 
 use crate::point::Point;
@@ -11,27 +10,23 @@ impl<const N: usize> Direction<N> {
         Direction(val % (2 * N) as u8)
     }
 
-    pub fn delta(self) -> Point<N> {
-        Point(array::from_fn(|i| {
-            if self.0 as usize % N == i {
-                if self.0 as usize / N == 0 {
-                    1
-                } else {
-                    -1
-                }
-            } else {
-                0
-            }
-        }))
+    pub const fn delta(self) -> Point<N> {
+        let mut componenents = [0; N];
+        componenents[self.0 as usize % N] = if self.0 as usize >= N { -1 } else { 1 };
+        Point(componenents)
     }
 
-    pub fn edge(self, size: Point<N>) -> Point<N> {
+    pub const fn edge(self, size: Point<N>) -> Point<N> {
         let mut components = [0; N];
         if self.0 >= N as u8 {
-            let i = (self.0 as usize) % N;
+            let i = (self.0 as usize) - N;
             components[i] = size.0[i] - 1
         }
         Point(components)
+    }
+
+    pub(crate) const fn size_in_dir(&self, size: Point<N>) -> isize {
+        size.0[self.0 as usize % N]
     }
 }
 
@@ -73,8 +68,8 @@ impl<const N: usize> Neg for Direction<N> {
 }
 
 impl Direction<2> {
-    pub const EAST: Direction<2> = Direction::new(0);
-    pub const SOUTH: Direction<2> = Direction::new(1);
-    pub const WEST: Direction<2> = Direction::new(2);
-    pub const NORTH: Direction<2> = Direction::new(3);
+    pub const EAST: Self = Direction(0);
+    pub const SOUTH: Self = Direction(1);
+    pub const WEST: Self = Direction(2);
+    pub const NORTH: Self = Direction(3);
 }
