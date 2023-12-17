@@ -5,7 +5,7 @@ use std::{
 
 use crate::direction::Direction;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Point<const N: usize>(pub [isize; N]);
 
 pub type Point2 = Point<2>;

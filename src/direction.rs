@@ -2,7 +2,7 @@ use std::ops::{Add, AddAssign, Neg, Sub, SubAssign};
 
 use crate::point::Point;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Direction<const N: usize>(u8);
 
 impl<const N: usize> Direction<N> {
