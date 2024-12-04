@@ -2,7 +2,7 @@ use std::ops::{Add, AddAssign, Neg, Sub, SubAssign};
 
 use crate::point::Point;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Direction<const N: usize>(u8);
 
 impl<const N: usize> Direction<N> {
@@ -33,14 +33,14 @@ impl<const N: usize> Direction<N> {
 impl<const N: usize> Add<isize> for Direction<N> {
     type Output = Self;
     fn add(self, rhs: isize) -> Direction<N> {
-        let val = self.0 as isize + N as isize + rhs;
+        let val = self.0 as isize + 2 * N as isize + rhs;
         Direction::new(val as u8)
     }
 }
 
 impl<const N: usize> AddAssign<isize> for Direction<N> {
     fn add_assign(&mut self, rhs: isize) {
-        let val = self.0 as isize + N as isize + rhs;
+        let val = self.0 as isize + 2 * N as isize + rhs;
         *self = Direction::new(val as u8)
     }
 }
@@ -48,14 +48,14 @@ impl<const N: usize> AddAssign<isize> for Direction<N> {
 impl<const N: usize> Sub<isize> for Direction<N> {
     type Output = Self;
     fn sub(self, rhs: isize) -> Direction<N> {
-        let val = self.0 as isize + N as isize - rhs;
+        let val = self.0 as isize + 2 * N as isize - rhs;
         Direction::new(val as u8)
     }
 }
 
 impl<const N: usize> SubAssign<isize> for Direction<N> {
     fn sub_assign(&mut self, rhs: isize) {
-        let val = self.0 as isize + N as isize - rhs;
+        let val = self.0 as isize + 2 * N as isize - rhs;
         *self = Direction::new(val as u8)
     }
 }
@@ -72,4 +72,16 @@ impl Direction<2> {
     pub const SOUTH: Self = Direction(1);
     pub const WEST: Self = Direction(2);
     pub const NORTH: Self = Direction(3);
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_2d_directions() {
+        use super::Direction;
+        assert_eq!(Direction::EAST + 1, Direction::SOUTH);
+        assert_eq!(Direction::SOUTH + 1, Direction::WEST);
+        assert_eq!(Direction::WEST + 1, Direction::NORTH);
+        assert_eq!(Direction::NORTH+ 1, Direction::EAST);
+    }
 }

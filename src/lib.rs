@@ -13,5 +13,6 @@ pub mod direction;
 pub mod grid;
 pub mod helpers;
 pub mod point;
+pub mod stackvec;
 
 pub use helpers::BytesSplitter;
