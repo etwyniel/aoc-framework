@@ -126,7 +126,7 @@ impl Part for () {
 }
 
 fn day_input_filename<D: Day + ?Sized>() -> String {
-    format!("2022-12-{}.in", D::N)
+    format!("{}-12-{}.in", D::YEAR, D::N)
 }
 
 fn bench<P: Part>(filename: &Path) -> Duration {
