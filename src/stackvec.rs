@@ -50,6 +50,20 @@ impl<T, const N: usize> StackVec<T, N> {
         Some(unsafe { cell.assume_init_read() })
     }
 
+    pub fn remove(&mut self, index: usize) -> Option<T> {
+        if index >= self.len {
+            return None;
+        }
+        //let val = std::mem::replace(&mut self.data[index], MaybeUninit::uninit());
+        self.len -= 1;
+        let mut last = std::mem::replace(&mut self.data[self.len], MaybeUninit::uninit());
+        for i in (index..self.len).rev() {
+            //self.data[i] = std::mem::replace(&mut self.data[i + 1], MaybeUninit::uninit());
+            last = std::mem::replace(&mut self.data[i], last);
+        }
+        Some(unsafe { last.assume_init_read() })
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.as_ref().iter()
     }
