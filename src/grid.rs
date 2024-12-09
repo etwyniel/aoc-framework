@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Display};
-use std::{iter, array};
 use std::ops::{Deref, DerefMut, Index};
+use std::{array, iter};
 
 use crate::point::Point;
 use crate::point::Point2;
@@ -37,19 +37,29 @@ impl<T: Clone, const N: usize> AsRef<GridView<'static, T, N>> for Grid<T, N> {
     }
 }
 
-impl<'a, T: Clone, const N: usize> GridView<'a, T, N> {
+impl<T: Clone, const N: usize> GridView<'_, T, N> {
     pub fn to_owned(self) -> Grid<T, N> {
-        let GridView { grid, stride, offset, size } = self;
+        let GridView {
+            grid,
+            stride,
+            offset,
+            size,
+        } = self;
         let grid = match grid {
             Cow::Owned(g) => Cow::Owned(g),
             Cow::Borrowed(b) => Cow::Owned(b.to_owned()),
         };
-        Grid(GridView { grid, stride, offset, size })
+        Grid(GridView {
+            grid,
+            stride,
+            offset,
+            size,
+        })
     }
 
     pub fn points_iter(&self) -> PointIter<N> {
         PointIter {
-            size: self.size,
+            size: self.size - Point::unit(),
             cur: Point::default(),
             done: false,
         }
@@ -115,7 +125,13 @@ impl<'a, T: Clone, const N: usize> GridView<'a, T, N> {
     pub fn from_data(data: Vec<T>, stride: [usize; N]) -> Grid<T, N> {
         let mut size = [0; N];
         let mut len = data.len();
-        size.iter_mut().zip(stride).rev().for_each(|(size, stride)| {*size = (len / stride) as isize; len %= stride});
+        size.iter_mut()
+            .zip(stride)
+            .rev()
+            .for_each(|(size, stride)| {
+                *size = (len / stride) as isize;
+                len %= stride
+            });
         Grid(GridView {
             grid: Cow::Owned(data),
             stride,
@@ -129,9 +145,14 @@ impl<'a, T: Clone, const N: usize> GridView<'a, T, N> {
 impl<T: Default + Clone, const N: usize> Grid<T, N> {
     pub fn from_size(size: [usize; N]) -> Grid<T, N> {
         let data: Vec<T> = vec![Default::default(); size.iter().product()];
-        let stride = array::from_fn(|i| if i == 0 {1} else {size[i-1]});
+        let stride = array::from_fn(|i| if i == 0 { 1 } else { size[i - 1] });
         let size = Point(array::from_fn(|i| size[i] as isize));
-        Grid(GridView { grid: Cow::Owned(data), stride, offset: Point::default(), size })
+        Grid(GridView {
+            grid: Cow::Owned(data),
+            stride,
+            offset: Point::default(),
+            size,
+        })
     }
 }
 
@@ -278,22 +299,23 @@ impl<const N: usize> Iterator for PointIter<N> {
     type Item = Point<N>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let size = &self.size.0;
-        let cur = self.cur;
         if self.done {
             return None;
         }
-        let done = cur.0.iter().zip(size.iter()).all(|(cur, sz)| *cur == sz - 1);
-        self.done = done;
+        let size = &self.size.0;
+        let cur = self.cur;
         let next = &mut self.cur.0;
-        for (next, size) in next.iter_mut().zip(size.iter()).rev() {
-            if *next == size - 1 {
+        let mut incremented = false;
+        for (next, &size) in next.iter_mut().zip(size.iter()).rev() {
+            if *next == size {
                 *next = 0;
             } else {
                 *next += 1;
+                incremented = true;
                 break;
             }
         }
+        self.done = !incremented;
         Some(cur)
     }
 }
@@ -304,7 +326,12 @@ mod tests {
     use super::Point;
     #[test]
     fn test_points_iter() {
-        let points = Grid::from_data(vec![0; 4], 2).points_iter().collect::<Vec<_>>();
-        assert_eq!(&points, &[Point([0, 0]), Point([0, 1]), Point([1, 0]), Point([1, 1])])
+        let points = Grid::from_data(vec![0; 4], 2)
+            .points_iter()
+            .collect::<Vec<_>>();
+        assert_eq!(
+            &points,
+            &[Point([0, 0]), Point([0, 1]), Point([1, 0]), Point([1, 1])]
+        )
     }
 }

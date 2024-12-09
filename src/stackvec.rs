@@ -1,4 +1,9 @@
-use std::{array, fmt::Debug, mem::MaybeUninit, ops::{Deref, DerefMut, Index, IndexMut}};
+use std::{
+    array,
+    fmt::Debug,
+    mem::MaybeUninit,
+    ops::{Deref, DerefMut, Index, IndexMut},
+};
 
 pub struct StackVec<T, const N: usize> {
     data: [MaybeUninit<T>; N],
@@ -15,6 +20,10 @@ impl<T, const N: usize> StackVec<T, N> {
 
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
     }
 
     pub fn push(&mut self, val: T) {
@@ -93,7 +102,9 @@ impl<T: Debug, const N: usize> Debug for StackVec<T, N> {
 impl<T, const N: usize> Drop for StackVec<T, N> {
     fn drop(&mut self) {
         for i in 0..self.len {
-            unsafe { self.data[i].assume_init_read(); }
+            unsafe {
+                self.data[i].assume_init_read();
+            }
         }
     }
 }
@@ -102,7 +113,9 @@ impl<T: Clone, const N: usize> Clone for StackVec<T, N> {
     fn clone(&self) -> Self {
         let mut cloned = Self::new();
         cloned.len = self.len;
-        self.iter().enumerate().for_each(|(i, val)| {cloned.data[i].write(val.clone());});
+        self.iter().enumerate().for_each(|(i, val)| {
+            cloned.data[i].write(val.clone());
+        });
         cloned
     }
 }

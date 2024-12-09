@@ -174,6 +174,10 @@ impl<const N: usize> Point<N> {
     pub const fn len_in_dir(self, dir: Direction<N>) -> isize {
         dir.size_in_dir(self)
     }
+
+    pub const fn unit() -> Self {
+        Point([1; N])
+    }
 }
 
 impl<const N: usize> From<[isize; N]> for Point<N> {
