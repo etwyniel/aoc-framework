@@ -175,7 +175,7 @@ fn impl_part(function: ItemFn, attrs: Attributes) -> syn::Result<proc_macro2::To
     let example_const = example_result
         .map(|res| match res {
             Lit::Str(s) => {
-                quote!(Some(aoc_framework::StrConst(#s)))
+                quote!(Some(aoc_framework::Str(std::borrow::Cow::Borrowed(#s))))
             }
             Lit::Int(i) => quote!(Some(aoc_framework::Num(#i))),
             _ => quote!(None),
