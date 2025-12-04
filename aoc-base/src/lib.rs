@@ -104,7 +104,7 @@ pub trait Part {
         let result = Self::run(BufReader::new(input.trim_matches('\n').as_bytes()))
             .context("Invalid example result")?;
         if result != expected {
-            bail!("Invalid example result\n\tGot\t\t{result}\n\tExpected\t{expected}",);
+            bail!("Invalid example result\n\tGot     \t{result}\n\tExpected\t{expected}",);
         }
         Ok(())
     }
@@ -209,10 +209,9 @@ pub fn run_and_display<D: Day + ?Sized, P: Part>(session_key: Option<&str>, p: u
     let y = D::YEAR;
     let d = D::N;
     match run::<D, P>(session_key) {
-        Ok((res, delta)) => eprintln!(
-            "\x1b[1;32mOK \x1b[0m {y}-12-{d:02}.{p} => {res:<15}\t({:.2?})",
-            delta
-        ),
+        Ok((res, delta)) => {
+            eprintln!("\x1b[1;32mOK \x1b[0m {y}-12-{d:02}.{p} =( {delta:^5.0?} )=> {res:<15}",)
+        }
         Err(err) => eprintln!("\x1b[1;31mERR\x1b[0m {y}-12-{d:02}.{p} => {err:?}"),
     }
 }
