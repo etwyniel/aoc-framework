@@ -9,6 +9,7 @@ pub use aoc_base::{
 };
 pub use aoc_derive::aoc;
 
+pub mod bcd;
 pub mod direction;
 pub mod grid;
 pub mod helpers;
