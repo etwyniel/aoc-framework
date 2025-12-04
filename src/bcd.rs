@@ -8,6 +8,10 @@ use std::{
 pub struct Bcd(u64);
 
 impl Bcd {
+    pub fn new(value: u64) -> Self {
+        value.into()
+    }
+
     pub fn len(self) -> u32 {
         u64::BITS / 4 - self.0.leading_zeros() / 4
     }
@@ -36,11 +40,11 @@ impl From<u64> for Bcd {
         let mut len = 0;
         let mut out = 0;
         while value > 0 {
-            out = (out >> 4) | ((value % 10) << (u64::BITS - 4));
+            out |= (value % 10) << (len * 4);
             value /= 10;
             len += 1;
         }
-        Bcd(out >> (u64::BITS - len * 4))
+        Bcd(out)
     }
 }
 
