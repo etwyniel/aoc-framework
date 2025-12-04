@@ -16,6 +16,10 @@ impl Bcd {
         u64::BITS / 4 - self.0.leading_zeros() / 4
     }
 
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
     pub fn repeat(self, n: u32) -> Self {
         let len = self.len();
         self.repeat_len(len, n)
