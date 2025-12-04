@@ -2,16 +2,14 @@
 pub use anyhow;
 pub use itertools::Itertools;
 
-use anyhow::{bail, Context};
+pub mod checker;
+
+use anyhow::{Context, bail};
 
 use std::{
     borrow::Cow,
-    env::current_exe,
     fmt::Display,
-    fs::File,
-    io::{BufRead, BufReader, Seek},
-    path::{Path, PathBuf},
-    sync::Arc,
+    io::{BufRead, BufReader},
     time::Duration,
 };
 
@@ -22,6 +20,8 @@ pub enum Answer {
 }
 
 pub use Answer::*;
+
+use crate::checker::Checker;
 
 impl PartialEq for Answer {
     fn eq(&self, other: &Self) -> bool {
@@ -59,7 +59,7 @@ impl From<String> for Answer {
     }
 }
 
-pub trait Day {
+pub trait Day: Sized {
     const YEAR: u16;
     const N: u8;
     const EXAMPLE: Option<&'static str> = None;
@@ -69,8 +69,9 @@ pub trait Day {
     type Part2: Part;
 
     fn run(session_key: Option<&str>) {
+        let checker = Checker::new(session_key.map(str::to_owned), "").unwrap();
         if Self::Part1::N != 0 {
-            run_and_display::<Self, Self::Part1>(session_key, 1)
+            checker.run_part::<Self, Self::Part1>();
         } else {
             eprintln!(
                 "\x1b[1;33mWRN\x1b[0m Day {} part 1 not implemented",
@@ -78,7 +79,7 @@ pub trait Day {
             );
         }
         if Self::Part2::N != 0 {
-            run_and_display::<Self, Self::Part2>(session_key, 2)
+            checker.run_part::<Self, Self::Part2>();
         } else {
             eprintln!(
                 "\x1b[1;33mWRN\x1b[0m Day {} part 2 not implemented",
@@ -102,9 +103,9 @@ pub trait Part {
             return Ok(());
         };
         let result = Self::run(BufReader::new(input.trim_matches('\n').as_bytes()))
-            .context("Invalid example result")?;
+            .context("Failed to run on example")?;
         if result != expected {
-            bail!("Invalid example result\n\tGot     \t{result}\n\tExpected\t{expected}",);
+            bail!("Incorrect example result\n\tGot     \t{result}\n\tExpected\t{expected}",);
         }
         Ok(())
     }
@@ -125,95 +126,14 @@ impl Part for () {
     const N: u8 = 0;
 }
 
-fn day_input_filename<D: Day + ?Sized>() -> String {
-    format!("{}-12-{}.in", D::YEAR, D::N)
-}
-
-fn bench<P: Part>(filename: &Path) -> Duration {
-    let mut reader = BufReader::new(File::open(filename).unwrap());
-    if let Some(d) = P::bench(&mut reader) {
-        return d;
-    }
-    let count = 100;
-    let start = std::time::Instant::now();
-    for _ in 0..count {
-        reader.seek(std::io::SeekFrom::Start(0)).unwrap();
-        P::run(&mut reader).unwrap();
-    }
-    let delta = start.elapsed();
-    delta / count
-}
-
-pub fn run<D: Day + ?Sized, P: Part>(
-    session_key: Option<&str>,
-) -> anyhow::Result<(Answer, Duration)> {
-    let y = D::YEAR;
-    let d = D::N;
-    // Check example inputs/outputs
-    let example = (P::N == 2)
-        .then_some(D::PART2_EXAMPLE)
-        .flatten()
-        .or(D::EXAMPLE);
-    if let Some(example) = example {
-        P::check(example)?;
-    }
-    let dir = if let Ok(dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        // if run as `cargo run`, have inputs directory next to src directory
-        PathBuf::from(dir)
-    } else {
-        // otherwise have input directory next to binary
-        current_exe()?
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("Invalid directory"))?
-            .to_owned()
-    }
-    .join("inputs");
-    if !dir.is_dir() {
-        std::fs::create_dir(&dir)?;
-    }
-    let input_file = dir.join(day_input_filename::<D>());
-    if !input_file.is_file() {
-        let url =
-            reqwest::Url::parse(&format!("https://adventofcode.com/{y}/day/{d}/input")).unwrap();
-        let jar = reqwest::cookie::Jar::default();
-        let Some(session_key) = session_key else {
-            bail!("Could not find AOC_TOKEN in env")
-        };
-        jar.add_cookie_str(&format!("session={session_key}"), &url);
-        let client = reqwest::blocking::Client::builder()
-            .cookie_provider(Arc::new(jar))
-            .build()?;
-        let mut resp = client
-            .get(url)
-            .header(
-                reqwest::header::USER_AGENT,
-                "github.com/etwyniel/aoc-framework by etwyniel@gmail.com",
-            )
-            .send()?
-            .error_for_status()?;
-        let mut output = File::create(&input_file)?;
-        std::io::copy(&mut resp, &mut output)?;
-    }
-
-    let reader = BufReader::new(File::open(&input_file)?);
-    let start = std::time::Instant::now();
-    let res = P::run(reader)?;
-    let mut delta = start.elapsed();
-    if delta < Duration::from_millis(1) {
-        delta = bench::<P>(&input_file)
-    }
-    Ok((res, delta))
-}
-
-pub fn run_and_display<D: Day + ?Sized, P: Part>(session_key: Option<&str>, p: u8) {
-    let y = D::YEAR;
-    let d = D::N;
-    match run::<D, P>(session_key) {
-        Ok((res, delta)) => {
-            eprintln!("\x1b[1;32mOK \x1b[0m {y}-12-{d:02}.{p} =( {delta:^5.0?} )=> {res:<15}",)
-        }
-        Err(err) => eprintln!("\x1b[1;31mERR\x1b[0m {y}-12-{d:02}.{p} => {err:?}"),
-    }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum OutputType {
+    TooLow,
+    TooHigh,
+    Incorrect(String),
+    Correct,
+    Unknown,
+    Invalid,
 }
 
 #[macro_export]
