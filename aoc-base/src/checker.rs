@@ -170,6 +170,7 @@ impl<'a> PartChecker<'a> {
         Ok(())
     }
 
+    #[allow(unused)]
     fn submit_answer(&self, res_str: &str) -> anyhow::Result<OutputType> {
         // retrieve http client to submit answer
         let Some(client) = &self.c.client else {
@@ -296,9 +297,20 @@ impl<'a> PartChecker<'a> {
             return Ok(OutputType::Correct);
         }
 
-        if let Some((ty, _)) = incorrect.into_iter().find(|prev| prev.1 == res_str) {
+        if let Some((ty, _)) = incorrect.iter().find(|(_, prev)| prev == &res_str) {
             // previously attempted incorrect answer
-            return Ok(ty);
+            return Ok(ty.clone());
+        }
+
+        if let Answer::Num(n) = &res {
+            if let Some((ty, _)) = incorrect.iter().find(|(ty, v)| {
+                let Ok(v) = v.parse::<u64>() else {
+                    return false;
+                };
+                ty == &OutputType::TooLow && *n < v || ty == &OutputType::TooHigh && *n > v
+            }) {
+                return Ok(ty.clone());
+            }
         }
 
         if let Some(correct) = correct {
@@ -306,14 +318,58 @@ impl<'a> PartChecker<'a> {
             return Ok(OutputType::Incorrect(correct));
         }
 
-        let ty = self.submit_answer(&res_str)?;
+        if atty::isnt(atty::Stream::Stdout) {
+            // can't prompt user, answer correctness is unknown
+            return Ok(OutputType::Unknown);
+        }
+
+        // prompt user whether to submit answer
+        eprintln!(
+            "\x1b[38;5;8m???\x1b[0m {}-12-{:02}.{} => {res_str}",
+            self.y, self.d, self.p
+        );
+        eprint!("\tCorrect answer? [yes (y)/no (n)/too low (l)/too high (h)] ");
+        stderr().flush()?;
+
+        // read answer
+        let mut line = String::new();
+        stdin().read_line(&mut line)?;
+        eprint!("\x1b[2A\x1b[J");
+        let ty = match line.trim().to_lowercase().as_str() {
+            "y" | "yes" => OutputType::Correct,
+            "n" | "no" => OutputType::Invalid,
+            "l" | "low" | "too low" => OutputType::TooLow,
+            "h" | "high" | "too high" => OutputType::TooHigh,
+            // return immediately, don't save unknown answers
+            _ => return Ok(OutputType::Unknown),
+        };
+
+        if let Answer::Num(n) = res {
+            // check if output type is coherent with saved answers
+            if ty == OutputType::TooLow {
+                if let Some((_, lower)) = incorrect.iter().find(|(ty, v)| {
+                    ty == &OutputType::TooHigh && v.parse::<u64>().map(|v| v <= *n).unwrap_or(false)
+                }) {
+                    bail!("Conflicting answers:\n\t{n} is too low, but\n\t{lower} was too high")
+                }
+            } else if ty == OutputType::TooHigh {
+                if let Some((_, higher)) = incorrect.iter().find(|(ty, v)| {
+                    ty == &OutputType::TooLow && v.parse::<u64>().map(|v| v >= *n).unwrap_or(false)
+                }) {
+                    bail!("Conflicting answers:\n\t{n} is too high, but\n\t{higher} was too low")
+                }
+            }
+        }
 
         // save answer, log potential error but continue
         if let Err(e) = self
             .save_answer(&res_str, &ty)
             .context("failed to save answer {res_str}")
         {
-            eprintln!("failed to save answer {res_str}: {e}")
+            eprintln!("{e}");
+            e.chain()
+                .skip(1)
+                .for_each(|cause| eprintln!("because: {}", cause));
         }
         Ok(ty)
     }
