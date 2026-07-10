@@ -1,38 +1,30 @@
-use std::collections::HashMap;
 use std::env::{self, current_exe};
 use std::fs::File;
 use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, Write, stderr, stdin};
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, bail};
-use reqwest::header::HeaderMap;
+use curl::easy::{Easy, List};
 
 use crate::{Answer, Day, OutputType, Part};
 
 const URL_BASE: &str = "https://adventofcode.com";
 
-fn get_client(session_key: &str) -> anyhow::Result<reqwest::blocking::Client> {
-    let jar = reqwest::cookie::Jar::default();
-    jar.add_cookie_str(&format!("session={session_key}"), &URL_BASE.parse()?);
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        reqwest::header::USER_AGENT,
-        "github.com/etwyniel/aoc-framework by etwyniel@gmail.com".parse()?,
-    );
-    let client = reqwest::blocking::Client::builder()
-        .cookie_provider(Arc::new(jar))
-        .default_headers(headers)
-        .build()?;
-    Ok(client)
+fn get_client(session_key: &str) -> anyhow::Result<Easy> {
+    let mut easy = Easy::new();
+    easy.cookie(&format!("session={session_key}"))?;
+    let mut list = List::new();
+    list.append("user-agent: github.com/etwyniel/aoc-framework by etwyniel@gmail.com")?;
+    easy.http_headers(list)?;
+    Ok(easy)
 }
 
 pub struct Checker {
     inputs_dir: PathBuf,
-    client: Option<reqwest::blocking::Client>,
     filters: Vec<i8>,
+    session_key: Option<String>,
 }
 
 impl Checker {
@@ -48,13 +40,9 @@ impl Checker {
         if !inputs_dir.is_dir() {
             std::fs::create_dir(&inputs_dir)?;
         }
-        let client = match session_key {
-            Some(session_key) => Some(get_client(&session_key)?),
-            None => {
-                eprintln!("Could not find AOC_TOKEN in env");
-                None
-            }
-        };
+        if session_key.is_none() {
+            eprintln!("Could not find AOC_TOKEN in env");
+        }
         let default_filter = if filter.trim().is_empty() { 0 } else { -1 };
         let mut filters = vec![default_filter; 25];
         for flt in filter.split(',') {
@@ -72,7 +60,7 @@ impl Checker {
         }
         Ok(Checker {
             inputs_dir,
-            client: client,
+            session_key,
             filters,
         })
     }
@@ -87,6 +75,7 @@ impl Checker {
             example2: D::PART2_EXAMPLE,
             example_result: P::EXAMPLE_RESULT,
             benchmark_runner: |reader| P::bench(reader),
+            session_key: self.session_key.as_deref(),
         }
     }
 
@@ -110,6 +99,7 @@ pub struct PartChecker<'a> {
     example2: Option<&'static str>,
     example_result: Option<Answer>,
     benchmark_runner: fn(&mut dyn BufRead) -> Option<Duration>,
+    session_key: Option<&'a str>,
 }
 
 impl<'a> PartChecker<'a> {
@@ -173,11 +163,12 @@ impl<'a> PartChecker<'a> {
     #[allow(unused)]
     fn submit_answer(&self, res_str: &str) -> anyhow::Result<OutputType> {
         // retrieve http client to submit answer
-        let Some(client) = &self.c.client else {
+        let Some(session_key) = self.session_key else {
             // no client (missing token), don't know if answer is correct
             return Ok(OutputType::Unknown);
         };
 
+        let mut client = get_client(session_key)?;
         let y = self.y;
         let d = self.d;
         let p = self.p;
@@ -198,30 +189,33 @@ impl<'a> PartChecker<'a> {
         }
 
         // submit answer to adventofcode.com
-        let mut form = HashMap::new();
-        form.insert("level", self.p.to_string());
-        form.insert("answer", res_str.to_string());
-        let mut resp = client
-            .post(format!("{URL_BASE}/{y}/day/{d}/answer"))
-            .form(&form)
-            .send()
-            .context("failed to submit answer")?;
+        let form = format!("level={}&answer={}", self.p, res_str);
+        client.url(&format!("{URL_BASE}/{y}/day/{d}/answer"))?;
+        client.post(true)?;
+        client.post_field_size(form.len() as u64)?;
+        client.read_function(move |buf| Ok(form.as_bytes().read(buf).unwrap_or(0)))?;
 
-        // read body to determine if answer was correct
-        let mut resp_body = String::new();
-        resp.read_to_string(&mut resp_body)?;
-        if !resp.status().is_success() {
-            bail!(
-                "request failed with status {}: {}",
-                resp.status(),
-                resp_body,
-            )
+        let mut resp_body = Vec::new();
+        {
+            // read body to determine if answer was correct
+            let mut transfer = client.transfer();
+            transfer.write_function(|data| {
+                resp_body.extend_from_slice(data);
+                Ok(data.len())
+            })?;
+
+            transfer.perform()?;
         }
-        let ty = if !resp_body.contains("not the right answer") {
+        let status = client.response_code()?;
+        let resp = String::from_utf8(resp_body.clone())?;
+        if !(200..300).contains(&status) {
+            bail!("request failed with status {}: {}", status, resp)
+        }
+        let ty = if !resp.contains("not the right answer") {
             OutputType::Correct
-        } else if resp_body.contains("too high") {
+        } else if resp.contains("too high") {
             OutputType::TooHigh
-        } else if resp_body.contains("too low") {
+        } else if resp.contains("too low") {
             OutputType::TooLow
         } else {
             OutputType::Invalid
@@ -230,19 +224,30 @@ impl<'a> PartChecker<'a> {
     }
 
     fn fetch_submitted_answers(&self) -> anyhow::Result<Vec<String>> {
-        let Some(client) = &self.c.client else {
+        let Some(session_key) = self.session_key else {
+            // no client (missing token)
             return Ok(Vec::new());
         };
 
-        let mut resp_body = String::new();
-        client
-            .get(format!("{URL_BASE}/{}/day/{}", self.y, self.d))
-            .send()?
-            .read_to_string(&mut resp_body)?;
+        let mut client = get_client(session_key)?;
+        client.url(&format!("{URL_BASE}/{}/day/{}", self.y, self.d))?;
+
+        let mut resp_body = Vec::new();
+        {
+            let mut transfer = client.transfer();
+            transfer.write_function(|data| {
+                resp_body.extend_from_slice(data);
+                Ok(data.len())
+            })?;
+
+            transfer.perform()?;
+        }
+
+        let resp = String::from_utf8(resp_body.clone())?;
+        let mut body = resp.as_str();
 
         // extract answers from html
         let mut answers = Vec::with_capacity(2);
-        let mut body = resp_body.as_str();
         while let Some(ndx) = body.find("Your puzzle answer was") {
             body = &body[ndx..];
             // find end of opening <code> tag
@@ -416,20 +421,32 @@ impl<'a> PartChecker<'a> {
         let input_file = self.input_file();
         if !input_file.is_file() {
             // fetch input file from adventofcode.com
-            let Some(client) = &self.c.client else {
+            let Some(session_key) = self.session_key else {
+                // no client (missing token)
                 bail!("Missing AOC_TOKEN environment variable, cannot fetch input");
             };
-            let url = reqwest::Url::parse(&format!("{URL_BASE}/{y}/day/{d}/input")).unwrap();
-            let mut resp = client
-                .get(url)
-                .header(
-                    reqwest::header::USER_AGENT,
-                    "github.com/etwyniel/aoc-framework by etwyniel@gmail.com",
-                )
-                .send()?
-                .error_for_status()?;
+
+            let mut resp_body = Vec::new();
+            let mut client = get_client(session_key)?;
+            client.url(&format!("{URL_BASE}/{y}/day/{d}/input"))?;
+            {
+                let mut transfer = client.transfer();
+                transfer.write_function(|data| {
+                    resp_body.extend_from_slice(data);
+                    Ok(data.len())
+                })?;
+                transfer.perform()?;
+            }
+            let status = client.response_code()?;
+            if !(200..300).contains(&status) {
+                bail!(
+                    "failed to get input with status {status}: {}",
+                    String::from_utf8(resp_body.clone())
+                        .unwrap_or_else(|_| "failed to parse body".to_string())
+                );
+            }
             let mut output = File::create(&input_file)?;
-            std::io::copy(&mut resp, &mut output)?;
+            output.write_all(&resp_body)?;
         }
 
         // run part on input file
